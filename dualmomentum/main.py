@@ -1,43 +1,55 @@
 import datetime as dt
+import operator
 
 import matplotlib
 matplotlib.use('Qt5Agg')  # must be specified before we import pyplot
 import matplotlib.pyplot as plt
 import pandas as pd
 import pandas_datareader as web
-import quandl
-
-
-QUANDL_AUTH_TOKEN = 'nWa2ZMz44c7gyZPzk8dW'
 
 
 ADJ_CLOSE = 'Adj Close'
+LOOKBACK = 365
+
+
+US_SYMBOLS = ['IVV', 'VEU', 'BND']
+UK_SYMBOLS = []
 
 
 def run():
-    quandl.get('LSE/VUSA', authtoken=QUANDL_AUTH_TOKEN)
-    quandl.get('LSE/VUTY', authtoken=QUANDL_AUTH_TOKEN)
+    _calc_returns(US_SYMBOLS)
 
+
+def _calc_returns(symbols):
     end = dt.datetime.today()
-    start = end - dt.timedelta(days=365)
+    start = end - dt.timedelta(days=LOOKBACK)
 
-    ivv = web.DataReader('IVV', 'yahoo', start, end)
-    veu = web.DataReader('VEU', 'yahoo', start, end)
-    bnd = web.DataReader('BND', 'yahoo', start, end)
+    returns = []
 
-    ivv_return = ivv[ADJ_CLOSE].pct_change().add(1).cumprod()
-    veu_return = veu[ADJ_CLOSE].pct_change().add(1).cumprod()
-    bnd_return = bnd[ADJ_CLOSE].pct_change().add(1).cumprod()
+    for symbol in symbols:
+        returns.append(_get_returns(symbol, start, end))
 
-    ivv_return.rename('IVV', inplace=True)
-    veu_return.rename('VEU', inplace=True)
-    bnd_return.rename('BND', inplace=True)
+    total_returns = dict(zip(symbols, [i[1] for i in returns]))
+    sorted_returns = sorted(total_returns.items(), key=operator.itemgetter(1), reverse=True)
 
-    returns = pd.concat([ivv_return, veu_return, bnd_return], names=['IVV', 'VEU', 'BND'], axis=1)
+    print('12 Month Return')
+    print('----------------')
+    for r in sorted_returns:
+        print('{:<10}{:>6.2%}'.format(r[0], r[1]))
+    print('----------------')
 
-    returns.plot(title='12 month returns')
-
+    returns_df = pd.concat([i[0] for i in returns], names=symbols, axis=1)
+    returns_df.plot(title='12 Month Returns')
     plt.show()
+
+
+def _get_returns(symbol, start, end):
+    prices = web.DataReader(symbol, 'yahoo', start, end)
+    returns = prices[ADJ_CLOSE].pct_change().add(1).cumprod()
+    returns.rename(symbol, inplace=True)
+
+    total_return = returns[-1] - 1.
+    return returns, total_return
 
 
 if __name__ == '__main__':
